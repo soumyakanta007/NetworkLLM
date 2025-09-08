@@ -65,3 +65,35 @@ class NetworkQueryProcessor:
             raise ConnectionError(f"Authentication failed for {self.device_info['host']}")
         except Exception as e:
             raise ConnectionError(f"Failed to connect to {self.device_info['host']}: {str(e)}")
+
+def main():
+    parser = argparse.ArgumentParser(description="NetworkLLM CLI - Interact with network devices using LLMs and Netmiko.")
+    parser.add_argument('--device_type', required=True, choices=SUPPORTED_DEVICE_TYPES.keys(), help='Type of network device')
+    parser.add_argument('--host', required=True, help='Hostname or IP address of the device')
+    parser.add_argument('--username', required=True, help='SSH username')
+    parser.add_argument('--port', type=int, default=22, help='SSH port (default: 22)')
+    parser.add_argument('--password', help='SSH password (will prompt if not provided)')
+    parser.add_argument('--command', required=True, help='Command to execute on the device')
+    args = parser.parse_args()
+
+    password = args.password or getpass(f"Password for {args.username}@{args.host}: ")
+
+    processor = NetworkQueryProcessor(
+        device_type=args.device_type,
+        host=args.host,
+        username=args.username,
+        password=password,
+        port=args.port
+    )
+    try:
+        connection = processor.connect_to_device()
+        print(f"Running command: {args.command}")
+        output = connection.send_command(args.command)
+        print("\n--- Command Output ---\n")
+        print(output)
+        connection.disconnect()
+    except Exception as e:
+        print(f"Error: {e}")
+
+if __name__ == "__main__":
+    main()
