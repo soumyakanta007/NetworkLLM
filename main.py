@@ -1,16 +1,9 @@
 import os
-from dotenv import load_dotenv
-import argparse
 import json
 from getpass import getpass
 from netmiko import ConnectHandler
 from netmiko import NetMikoTimeoutException, NetMikoAuthenticationException
 from openai import OpenAI
-
-
-load_dotenv()
-api_key = os.getenv("OPENAI_API_KEY")
-
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "api_key")
 client = OpenAI(
@@ -139,34 +132,30 @@ def summarize_output_with_llm(command: str, output: str, device_type: str) -> st
     return summary
 
 def main():
-    parser = argparse.ArgumentParser(description="NetworkLLM CLI - Interact with network devices using LLMs and Netmiko.")
-    parser.add_argument('--device_type', required=True, choices=SUPPORTED_DEVICE_TYPES.keys(), help='Type of network device')
-    parser.add_argument('--host', required=True, help='Hostname or IP address of the device')
-    parser.add_argument('--username', required=True, help='SSH username')
-    parser.add_argument('--port', type=int, default=22, help='SSH port (default: 22)')
-    parser.add_argument('--password', help='SSH password (will prompt if not provided)')
-    args = parser.parse_args()
-
-    stored_username, stored_password = load_credentials(args.host)
-    username = args.username or stored_username
-    password = args.password or stored_password
-    if not username:
-        username = input(f"Username for {args.host}: ")
-    if not password:
-        password = getpass(f"Password for {username}@{args.host}: ")
-    save_credentials(username, password, args.host)
+    print("NetworkLLM CLI - Interact with network devices using LLMs and Netmiko.")
+    device_type = input(f"Device type {list(SUPPORTED_DEVICE_TYPES.keys())}: ")
+    while device_type not in SUPPORTED_DEVICE_TYPES:
+        print(f"Invalid device type. Supported types: {', '.join(SUPPORTED_DEVICE_TYPES.keys())}")
+        device_type = input(f"Device type {list(SUPPORTED_DEVICE_TYPES.keys())}: ")
+    host = input("Hostname or IP address of the device: ")
+    stored_username, stored_password = load_credentials(host)
+    username = stored_username or input("SSH username: ")
+    port_input = input("SSH port (default: 22): ")
+    port = int(port_input) if port_input.strip() else 22
+    password = stored_password or getpass(f"Password for {username}@{host}: ")
+    save_credentials(username, password, host)
 
     nl_query = input("What do you want to know or do on the network device? (Describe in natural language): ")
 
     processor = NetworkQueryProcessor(
-        device_type=args.device_type,
-        host=args.host,
+        device_type=device_type,
+        host=host,
         username=username,
         password=password,
-        port=args.port
+        port=port
     )
     try:
-        command = get_command_from_llm(nl_query, args.device_type)
+        command = get_command_from_llm(nl_query, device_type)
         print(f"\nGenerated command: {command}\n")
         connection = processor.connect_to_device()
         print(f"Running command: {command}")
@@ -174,7 +163,7 @@ def main():
         print("\n--- Raw Command Output ---\n")
         print(output)
         connection.disconnect()
-        summary = summarize_output_with_llm(command, output, args.device_type)
+        summary = summarize_output_with_llm(command, output, device_type)
         print("\n--- LLM Summary ---\n")
         print(summary)
     except Exception as e:
